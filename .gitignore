@@ -1,15 +1,58 @@
-*.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+gitignore
+# Built application files
+*.apk
+*.aab
+*.ap_
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration properties (sdk.dir, etc)
 local.properties
+
+# Log Files
+*.log
+
+# Android Studio Navigation editor files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# IntelliJ
+*.iml
+.idea/
+
+# Keystore files (IMPORTANT: Never commit your release keystore!)
+# *.jks
+# *.keystore
+
+# External native build folder generated in Android Studio 2.2 and later
+.externalNativeBuild/
+
+# Google Services (JSON file) - If you handle this per build type or environment
+# google-services.json
+
+# Environment specific files
+.env
+
+# Crashlytics plugin
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+# VS Code
+.vscode/

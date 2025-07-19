@@ -48,6 +48,16 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -73,10 +83,45 @@ fun WearApp() {
             contentAlignment = Alignment.Center
         ) {
             TimeText()
-            RunScreen()
+            LocationPermissionWrapper {
+                RunScreen()
+            }
         }
     }
 }
+
+@Composable
+fun LocationPermissionWrapper(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    var permissionGranted by remember { mutableStateOf(false) }
+    var permissionRequested by remember { mutableStateOf(false) }
+
+    // Call rememberLauncherForActivityResult directly in the composable's scope
+    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        permissionGranted = isGranted
+    }
+
+    LaunchedEffect(Unit) {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        permissionGranted = granted
+        if (!granted && !permissionRequested) {
+            permissionRequested = true
+            launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    if (permissionGranted) {
+        content()
+    } else {
+        Text(text = "Location permission required to track your run.")
+    }
+}
+
 
 @Composable
 fun RunScreen() {

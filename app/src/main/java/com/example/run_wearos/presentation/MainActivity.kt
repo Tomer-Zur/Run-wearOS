@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
@@ -58,6 +59,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationResult
+import android.location.Location
+import java.util.LinkedList
+import java.util.Iterator
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -148,10 +157,79 @@ fun StartRunButton(onStart: () -> Unit) {
 fun RunInfo(onStop: () -> Unit) {
     // Mock values
     val bpm = 120
-    val distance = 0.42 // km
-    val pace = 5.0 // min/km
     var elapsedSeconds by remember { mutableIntStateOf(0) }
     var paused by remember { mutableStateOf(false) }
+
+    var previousLocation by remember { mutableStateOf<Location?>(null) }
+    var totalDistanceMeters by remember { mutableStateOf(0f) }
+    val locationHistory = remember { LinkedList<Pair<Location, Long>>() }
+    var rollingPace by remember { mutableStateOf(0.0) }
+
+    // 1. Location state and client
+    val context = LocalContext.current
+    val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+    var lastLocation by remember { mutableStateOf<Location?>(null) }
+
+    // 2. LocationCallback
+    val locationCallback = remember {
+        object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult) {
+                result.lastLocation?.let { location ->
+                    if (previousLocation != null) {
+                        val distance = previousLocation!!.distanceTo(location) // in meters
+                        if (distance > 1) { // filter out noise
+                            totalDistanceMeters += distance
+                        }
+                    }
+                    previousLocation = location
+                    lastLocation = location
+                    // Add to history
+                    val now = System.currentTimeMillis()
+                    locationHistory.add(Pair(location, now))
+                    // Prune history to last 30 seconds
+                    while (locationHistory.isNotEmpty() && now - locationHistory.first.second > 30_000) {
+                        locationHistory.removeFirst()
+                    }
+                    // Calculate rolling distance
+                    var rollingDistance = 0.0
+                    var prev: Location? = null
+                    for ((loc, _) in locationHistory) {
+                        if (prev != null) {
+                            rollingDistance += prev.distanceTo(loc)
+                        }
+                        prev = loc
+                    }
+                    // Calculate pace (min/km) if enough distance
+                    if (rollingDistance > 5) {
+                        val minutes = 30.0 / 60.0 // 0.5 min
+                        val km = rollingDistance / 1000.0
+                        rollingPace = minutes / km
+                    } else {
+                        rollingPace = 0.0
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Start/stop location updates
+    DisposableEffect(Unit) {
+        val locationRequest = LocationRequest.create().apply {
+            interval = 2000
+            fastestInterval = 1000
+            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        }
+
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+        }
+
+        onDispose {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                fusedLocationClient.removeLocationUpdates(locationCallback)
+            }
+        }
+    }
 
     LaunchedEffect(paused) {
         while (!paused) {
@@ -172,9 +250,9 @@ fun RunInfo(onStop: () -> Unit) {
         // Move stats lower
         Spacer(modifier = Modifier.weight(1f))
         Text(text = "BPM: $bpm")
-        Text(text = "Distance: %.2f km".format(distance))
+        Text(text = "Distance: %.2f km".format(totalDistanceMeters / 1000f))
         Text(text = "Time: %02d:%02d".format(minutes, seconds))
-        Text(text = "Pace: %.2f min/km".format(pace))
+        Text(text = if (rollingPace > 0.0) "Pace: %.2f min/km".format(rollingPace) else "Pace: --")
         Spacer(modifier = Modifier.height(32.dp))
         Row(
             modifier = Modifier

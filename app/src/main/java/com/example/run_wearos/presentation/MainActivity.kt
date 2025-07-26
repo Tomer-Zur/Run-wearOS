@@ -67,6 +67,70 @@ import com.google.android.gms.location.LocationResult
 import android.location.Location
 import java.util.LinkedList
 import java.util.Iterator
+import java.net.HttpURLConnection
+import java.net.URL
+import java.io.OutputStreamWriter
+import org.json.JSONObject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import android.util.Log
+
+const val CREATE_ACTIVITY_URL = "https://runfuncionapp.azurewebsites.net/api/createActivity"
+
+suspend fun sendRunToBackend(
+    userId: String,
+    trackId: String,
+    startTime: String,
+    stopTime: String,
+    timestamp: String,
+    distance: Float,
+    duration: Int,
+    calories: Float,
+    averagePace: Float,
+    averageSpeed: Float,
+    eventId: String? = null
+): Pair<Boolean, String?> = withContext(Dispatchers.IO) {
+    try {
+        val json = JSONObject().apply {
+            put("userId", userId)
+            put("trackId", trackId)
+            put("start_time", startTime)
+            put("stop_time", stopTime)
+            put("timestamp", timestamp)
+            put("distance", distance)
+            put("duration", duration)
+            put("calories", calories)
+            put("averagePace", averagePace)
+            put("averageSpeed", averageSpeed)
+            if (eventId != null) put("eventId", eventId)
+        }
+        val url = URL(CREATE_ACTIVITY_URL)
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json")
+        conn.doOutput = true
+        OutputStreamWriter(conn.outputStream).use { it.write(json.toString()) }
+        val responseCode = conn.responseCode
+        val responseMessage = conn.responseMessage
+        val responseBody = try {
+            conn.inputStream.bufferedReader().use { it.readText() }
+        } catch (e: Exception) {
+            conn.errorStream?.bufferedReader()?.use { it.readText() }
+        }
+        conn.disconnect()
+        Log.d("RunBackend", "Response code: $responseCode, message: $responseMessage, body: $responseBody")
+        if (responseCode in 200..299) {
+            true to responseBody
+        } else {
+            false to ("HTTP $responseCode $responseMessage: $responseBody")
+        }
+    } catch (e: Exception) {
+        Log.e("RunBackend", "Exception: ${e.localizedMessage}", e)
+        false to e.localizedMessage
+    }
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -254,6 +318,8 @@ fun RunInfo(onStop: () -> Unit) {
         Text(text = "Time: %02d:%02d".format(minutes, seconds))
         Text(text = if (rollingPace > 0.0) "Pace: %.2f min/km".format(rollingPace) else "Pace: --")
         Spacer(modifier = Modifier.height(32.dp))
+        val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -267,7 +333,37 @@ fun RunInfo(onStop: () -> Unit) {
                     Icon(imageVector = Icons.Filled.Pause, contentDescription = "Pause")
                 }
             }
-            Button(onClick = { onStop() }) {
+            Button(onClick = {
+                // Example values for userId, trackId, etc. Replace with real values as needed.
+                val userId = "demoUser" // TODO: Replace with actual user ID
+                val trackId = "demoTrack" // TODO: Replace with actual track ID
+                val startTime = "2024-01-01T10:00:00Z" // TODO: Replace with actual start time
+                val stopTime = "2024-01-01T10:30:00Z" // TODO: Replace with actual stop time
+                val timestamp = System.currentTimeMillis().toString()
+                val calories = 0f // TODO: Replace with actual calories if available
+                val avgPace = rollingPace.toFloat()
+                val avgSpeed = if (elapsedSeconds > 0) (totalDistanceMeters / elapsedSeconds) else 0f
+                coroutineScope.launch {
+                    val (success, errorMsg) = sendRunToBackend(
+                        userId = userId,
+                        trackId = trackId,
+                        startTime = startTime,
+                        stopTime = stopTime,
+                        timestamp = timestamp,
+                        distance = totalDistanceMeters,
+                        duration = elapsedSeconds,
+                        calories = calories,
+                        averagePace = avgPace,
+                        averageSpeed = avgSpeed
+                    )
+                    Toast.makeText(
+                        context,
+                        if (success) "Run logged successfully!" else "Failed to log run: $errorMsg",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    onStop()
+                }
+            }) {
                 Icon(imageVector = Icons.Filled.Stop, contentDescription = "Stop")
             }
         }

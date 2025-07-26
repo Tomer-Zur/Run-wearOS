@@ -76,6 +76,10 @@ import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import android.util.Log
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 const val CREATE_ACTIVITY_URL = "https://runfuncionapp.azurewebsites.net/api/createActivity"
 
@@ -199,10 +203,27 @@ fun LocationPermissionWrapper(content: @Composable () -> Unit) {
 @Composable
 fun RunScreen() {
     var runStarted by remember { mutableStateOf(false) }
+    var startTime by remember { mutableStateOf<String?>(null) }
+    var endTime by remember { mutableStateOf<String?>(null) }
+    val dateFormat = remember {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+    }
     if (!runStarted) {
-        StartRunButton(onStart = { runStarted = true })
+        StartRunButton(onStart = {
+            startTime = dateFormat.format(Date())
+            runStarted = true
+        })
     } else {
-        RunInfo(onStop = { runStarted = false })
+        RunInfo(
+            onStop = {
+                endTime = dateFormat.format(Date())
+                runStarted = false
+            },
+            startTime = startTime,
+            endTime = endTime
+        )
     }
 }
 
@@ -218,7 +239,11 @@ fun StartRunButton(onStart: () -> Unit) {
 }
 
 @Composable
-fun RunInfo(onStop: () -> Unit) {
+fun RunInfo(
+    onStop: () -> Unit,
+    startTime: String?,
+    endTime: String?
+) {
     // Mock values
     val bpm = 120
     var elapsedSeconds by remember { mutableIntStateOf(0) }
@@ -320,6 +345,7 @@ fun RunInfo(onStop: () -> Unit) {
         Spacer(modifier = Modifier.height(32.dp))
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
+        val userWeightKg = 70f // Default user weight
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -334,21 +360,20 @@ fun RunInfo(onStop: () -> Unit) {
                 }
             }
             Button(onClick = {
-                // Example values for userId, trackId, etc. Replace with real values as needed.
                 val userId = "demoUser" // TODO: Replace with actual user ID
                 val trackId = "demoTrack" // TODO: Replace with actual track ID
-                val startTime = "2024-01-01T10:00:00Z" // TODO: Replace with actual start time
-                val stopTime = "2024-01-01T10:30:00Z" // TODO: Replace with actual stop time
+                val startTimeStr = startTime ?: ""
+                val endTimeStr = endTime ?: SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
                 val timestamp = System.currentTimeMillis().toString()
-                val calories = 0f // TODO: Replace with actual calories if available
+                val calories = userWeightKg * (totalDistanceMeters / 1000f) * 1.036f
                 val avgPace = rollingPace.toFloat()
                 val avgSpeed = if (elapsedSeconds > 0) (totalDistanceMeters / elapsedSeconds) else 0f
                 coroutineScope.launch {
                     val (success, errorMsg) = sendRunToBackend(
                         userId = userId,
                         trackId = trackId,
-                        startTime = startTime,
-                        stopTime = stopTime,
+                        startTime = startTimeStr,
+                        stopTime = endTimeStr,
                         timestamp = timestamp,
                         distance = totalDistanceMeters,
                         duration = elapsedSeconds,

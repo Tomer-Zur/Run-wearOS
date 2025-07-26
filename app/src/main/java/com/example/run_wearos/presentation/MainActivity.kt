@@ -80,6 +80,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import android.content.Intent
+import android.content.Context
 
 const val CREATE_ACTIVITY_URL = "https://runfuncionapp.azurewebsites.net/api/createActivity"
 
@@ -143,6 +145,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setTheme(android.R.style.Theme_DeviceDefault)
+
+        // Start the TokenListenerService
+        val intent = Intent(this, Class.forName("com.example.run_wearos.TokenListenerService"))
+        startService(intent)
 
         setContent {
             WearApp()
@@ -346,6 +352,11 @@ fun RunInfo(
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
         val userWeightKg = 70f // Default user weight
+        // Read user info from SharedPreferences
+        val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+        val userId = prefs.getString("userId", "demoUser") ?: "demoUser"
+        val username = prefs.getString("username", "demoUsername") ?: "demoUsername"
+        val authToken = prefs.getString("auth_token", null)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -360,8 +371,6 @@ fun RunInfo(
                 }
             }
             Button(onClick = {
-                val userId = "demoUser" // TODO: Replace with actual user ID
-                val trackId = "demoTrack" // TODO: Replace with actual track ID
                 val startTimeStr = startTime ?: ""
                 val endTimeStr = endTime ?: SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date())
                 val timestamp = System.currentTimeMillis().toString()
@@ -371,7 +380,7 @@ fun RunInfo(
                 coroutineScope.launch {
                     val (success, errorMsg) = sendRunToBackend(
                         userId = userId,
-                        trackId = trackId,
+                        trackId = "demoTrack", // TODO: Replace with actual track ID
                         startTime = startTimeStr,
                         stopTime = endTimeStr,
                         timestamp = timestamp,

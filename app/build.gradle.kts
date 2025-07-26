@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.material.icons.extended)
     implementation(libs.google.playServicesLocation)
     implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.lifecycle.service)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.ui.test.junit4)
     debugImplementation(libs.ui.tooling)

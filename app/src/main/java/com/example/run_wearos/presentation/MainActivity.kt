@@ -275,22 +275,26 @@ fun RunScreen(onLogout: () -> Unit) {
     
     Column(
         modifier = Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        // Logout button at the top
-        Button(
-            onClick = onLogout,
-            modifier = Modifier.padding(8.dp)
-        ) {
-            Text("Logout")
-        }
-        
         // Main run content
         if (!runStarted) {
-            StartRunButton(onStart = {
-                startTime = dateFormat.format(Date())
-                runStarted = true
-            })
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                StartRunButton(onStart = {
+                    startTime = dateFormat.format(Date())
+                    runStarted = true
+                })
+                
+                Button(
+                    onClick = onLogout
+                ) {
+                    Text("Logout")
+                }
+            }
         } else {
             RunInfo(
                 onStop = {
@@ -343,19 +347,23 @@ fun RunInfo(
                 result.lastLocation?.let { location ->
                     if (previousLocation != null) {
                         val distance = previousLocation!!.distanceTo(location) // in meters
-                        if (distance > 1) { // filter out noise
+                        if (distance > 1.0) { // Filter out noise and small movements
                             totalDistanceMeters += distance
                         }
                     }
+                    
                     previousLocation = location
                     lastLocation = location
+                    
                     // Add to history
                     val now = System.currentTimeMillis()
                     locationHistory.add(Pair(location, now))
+                    
                     // Prune history to last 30 seconds
                     while (locationHistory.isNotEmpty() && now - locationHistory.first.second > 30_000) {
                         locationHistory.removeFirst()
                     }
+                    
                     // Calculate rolling distance
                     var rollingDistance = 0.0
                     var prev: Location? = null
@@ -365,11 +373,17 @@ fun RunInfo(
                         }
                         prev = loc
                     }
-                    // Calculate pace (min/km) if enough distance
-                    if (rollingDistance > 5) {
-                        val minutes = 30.0 / 60.0 // 0.5 min
+                    
+                    // Calculate pace (min/km) if enough distance and time
+                    if (rollingDistance > 10 && locationHistory.size > 1) {
+                        val timeSpan = (locationHistory.last.second - locationHistory.first.second) / 1000.0 // seconds
+                        val minutes = timeSpan / 60.0
                         val km = rollingDistance / 1000.0
-                        rollingPace = minutes / km
+                        if (km > 0 && minutes > 0) {
+                            rollingPace = minutes / km
+                        } else {
+                            rollingPace = 0.0
+                        }
                     } else {
                         rollingPace = 0.0
                     }
@@ -381,12 +395,25 @@ fun RunInfo(
     // 3. Start/stop location updates
     DisposableEffect(Unit) {
         val locationRequest = LocationRequest.create().apply {
-            interval = 2000
+            interval = 2000 // 2 seconds between updates
             fastestInterval = 1000
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+            smallestDisplacement = 2.0f // Request updates for movements of 2+ meters
         }
 
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            // Try to get last known location first
+            try {
+                fusedLocationClient.lastLocation.addOnSuccessListener { lastKnownLocation ->
+                    if (lastKnownLocation != null) {
+                        previousLocation = lastKnownLocation
+                        lastLocation = lastKnownLocation
+                    }
+                }
+            } catch (e: Exception) {
+                // Ignore errors for last known location
+            }
+            
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
         }
 

@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
+import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.example.run_wearos.R
 import com.example.run_wearos.presentation.theme.RunwearOsTheme
@@ -96,6 +97,7 @@ suspend fun sendRunToBackend(
     calories: Float,
     averagePace: Float,
     averageSpeed: Float,
+    authToken: String? = null,
     eventId: String? = null
 ): Pair<Boolean, String?> = withContext(Dispatchers.IO) {
     try {
@@ -116,6 +118,9 @@ suspend fun sendRunToBackend(
         val conn = url.openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
+        if (authToken != null) {
+            conn.setRequestProperty("Authorization", "Bearer $authToken")
+        }
         conn.doOutput = true
         OutputStreamWriter(conn.outputStream).use { it.write(json.toString()) }
         val responseCode = conn.responseCode
@@ -166,10 +171,61 @@ fun WearApp() {
             contentAlignment = Alignment.Center
         ) {
             TimeText()
-            LocationPermissionWrapper {
-                RunScreen()
+            AuthenticationWrapper { onLogout ->
+                LocationPermissionWrapper {
+                    RunScreen(onLogout = onLogout)
+                }
             }
         }
+    }
+}
+
+@Composable
+fun AuthenticationWrapper(content: @Composable (onLogout: () -> Unit) -> Unit) {
+    val context = LocalContext.current
+    var isAuthenticated by remember { mutableStateOf(false) }
+    var isCheckingAuth by remember { mutableStateOf(true) }
+    
+    val coroutineScope = rememberCoroutineScope()
+    
+    val checkAuth = suspend {
+        val storedToken = getStoredToken(context)
+        if (storedToken != null) {
+            val isValid = validateToken(storedToken)
+            isAuthenticated = isValid
+            if (!isValid) {
+                clearCredentials(context)
+            }
+        } else {
+            isAuthenticated = false
+        }
+        isCheckingAuth = false
+    }
+    
+    val handleLogout = {
+        clearCredentials(context)
+        isAuthenticated = false
+    }
+    
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            checkAuth()
+        }
+    }
+    
+    if (isCheckingAuth) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+    } else if (isAuthenticated) {
+        content(handleLogout)
+    } else {
+        LoginScreen(onLoginSuccess = {
+            isAuthenticated = true
+        })
     }
 }
 
@@ -207,7 +263,7 @@ fun LocationPermissionWrapper(content: @Composable () -> Unit) {
 
 
 @Composable
-fun RunScreen() {
+fun RunScreen(onLogout: () -> Unit) {
     var runStarted by remember { mutableStateOf(false) }
     var startTime by remember { mutableStateOf<String?>(null) }
     var endTime by remember { mutableStateOf<String?>(null) }
@@ -216,20 +272,35 @@ fun RunScreen() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
     }
-    if (!runStarted) {
-        StartRunButton(onStart = {
-            startTime = dateFormat.format(Date())
-            runStarted = true
-        })
-    } else {
-        RunInfo(
-            onStop = {
-                endTime = dateFormat.format(Date())
-                runStarted = false
-            },
-            startTime = startTime,
-            endTime = endTime
-        )
+    
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Logout button at the top
+        Button(
+            onClick = onLogout,
+            modifier = Modifier.padding(8.dp)
+        ) {
+            Text("Logout")
+        }
+        
+        // Main run content
+        if (!runStarted) {
+            StartRunButton(onStart = {
+                startTime = dateFormat.format(Date())
+                runStarted = true
+            })
+        } else {
+            RunInfo(
+                onStop = {
+                    endTime = dateFormat.format(Date())
+                    runStarted = false
+                },
+                startTime = startTime,
+                endTime = endTime
+            )
+        }
     }
 }
 
@@ -354,8 +425,8 @@ fun RunInfo(
         val userWeightKg = 70f // Default user weight
         // Read user info from SharedPreferences
         val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        val userId = prefs.getString("userId", "demoUser") ?: "demoUser"
-        val username = prefs.getString("username", "demoUsername") ?: "demoUsername"
+        val userId = prefs.getString("userId", "") ?: ""
+        val username = prefs.getString("username", "") ?: ""
         val authToken = prefs.getString("auth_token", null)
         Row(
             modifier = Modifier
@@ -388,7 +459,8 @@ fun RunInfo(
                         duration = elapsedSeconds,
                         calories = calories,
                         averagePace = avgPace,
-                        averageSpeed = avgSpeed
+                        averageSpeed = avgSpeed,
+                        authToken = authToken
                     )
                     Toast.makeText(
                         context,

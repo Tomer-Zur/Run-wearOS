@@ -21,9 +21,23 @@ import org.json.JSONObject
 import android.util.Log
 import android.content.Context
 import androidx.compose.material3.TextField
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
+import java.security.cert.X509Certificate
 
 const val LOGIN_URL = "https://runfuncionapp.azurewebsites.net/api/login"
 const val VALIDATE_TOKEN_URL = "https://runfuncionapp.azurewebsites.net/api/validate-token"
+
+// Create a trust manager that trusts all certificates (for development only)
+private fun createTrustAllCerts(): Array<TrustManager> {
+    return arrayOf(object : X509TrustManager {
+        override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {}
+        override fun getAcceptedIssuers(): Array<X509Certificate> = arrayOf()
+    })
+}
 
 data class LoginResponse(
     val success: Boolean,
@@ -41,10 +55,23 @@ suspend fun loginUser(username: String, password: String): LoginResponse = withC
         }
         
         val url = URL(LOGIN_URL)
-        val conn = url.openConnection() as HttpURLConnection
+        val conn = url.openConnection() as HttpsURLConnection
+        
+        // Configure SSL to trust all certificates (for development)
+        try {
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, createTrustAllCerts(), java.security.SecureRandom())
+            conn.sslSocketFactory = sslContext.socketFactory
+            conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+        } catch (e: Exception) {
+            Log.w("Login", "Failed to configure SSL, using default: ${e.message}")
+        }
+        
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json")
         conn.doOutput = true
+        conn.connectTimeout = 10000 // 10 seconds
+        conn.readTimeout = 10000 // 10 seconds
         
         OutputStreamWriter(conn.outputStream).use { it.write(json.toString()) }
         
@@ -75,9 +102,15 @@ suspend fun loginUser(username: String, password: String): LoginResponse = withC
         }
     } catch (e: Exception) {
         Log.e("Login", "Exception: ${e.localizedMessage}", e)
+        val errorMsg = when {
+            e.message?.contains("chain", ignoreCase = true) == true -> "SSL Certificate error. Please check your network connection."
+            e.message?.contains("timeout", ignoreCase = true) == true -> "Connection timeout. Please try again."
+            e.message?.contains("unable to resolve host", ignoreCase = true) == true -> "No internet connection. Please check your network."
+            else -> "Network error: ${e.localizedMessage}"
+        }
         LoginResponse(
             success = false,
-            errorMessage = "Network error: ${e.localizedMessage}"
+            errorMessage = errorMsg
         )
     }
 }
@@ -85,9 +118,22 @@ suspend fun loginUser(username: String, password: String): LoginResponse = withC
 suspend fun validateToken(token: String): Boolean = withContext(Dispatchers.IO) {
     try {
         val url = URL(VALIDATE_TOKEN_URL)
-        val conn = url.openConnection() as HttpURLConnection
+        val conn = url.openConnection() as HttpsURLConnection
+        
+        // Configure SSL to trust all certificates (for development)
+        try {
+            val sslContext = SSLContext.getInstance("TLS")
+            sslContext.init(null, createTrustAllCerts(), java.security.SecureRandom())
+            conn.sslSocketFactory = sslContext.socketFactory
+            conn.hostnameVerifier = javax.net.ssl.HostnameVerifier { _, _ -> true }
+        } catch (e: Exception) {
+            Log.w("TokenValidation", "Failed to configure SSL, using default: ${e.message}")
+        }
+        
         conn.requestMethod = "GET"
         conn.setRequestProperty("Authorization", "Bearer $token")
+        conn.connectTimeout = 10000 // 10 seconds
+        conn.readTimeout = 10000 // 10 seconds
         
         val responseCode = conn.responseCode
         conn.disconnect()

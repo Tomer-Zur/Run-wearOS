@@ -188,6 +188,7 @@ suspend fun sendRunToBackend(
             put("calories", calories)
             put("averagePace", averagePace)
             put("averageSpeed", averageSpeed)
+            put("type", "Wear OS Run")  // Add the type field
             if (eventId != null) put("eventId", eventId)
         }
 

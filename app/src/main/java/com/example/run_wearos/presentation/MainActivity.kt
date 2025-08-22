@@ -31,6 +31,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -48,15 +52,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.wear.compose.material.Button
+import androidx.wear.compose.material.Card
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
 import androidx.wear.compose.material.Text
+import androidx.wear.compose.material.Scaffold
+import androidx.wear.compose.material.CompactButton
 import androidx.wear.compose.material.TimeText
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.example.run_wearos.R
@@ -259,7 +269,7 @@ fun WearApp() {
                 .background(MaterialTheme.colors.background),
             contentAlignment = Alignment.Center
         ) {
-            TimeText()
+            // ✅ REMOVE TimeText() from here
             AuthenticationWrapper { onLogout ->
                 LocationPermissionWrapper {
                     RunScreen(onLogout = onLogout)
@@ -268,7 +278,6 @@ fun WearApp() {
         }
     }
 }
-
 @Composable
 fun AuthenticationWrapper(content: @Composable (onLogout: () -> Unit) -> Unit) {
     val context = LocalContext.current
@@ -372,16 +381,36 @@ fun RunScreen(onLogout: () -> Unit) {
         verticalArrangement = Arrangement.Center
     ) {
         if (!runStarted) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            // Welcome screen
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(16.dp)
             ) {
+                Text(
+                    text = "Ready to Run?",
+                    color = MaterialTheme.colors.primary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
                 StartRunButton(onStart = {
                     startTime = dateFormat.format(Date())
                     runStarted = true
                 })
-                Button(onClick = onLogout) {
-                    Text("Logout")
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(
+                    onClick = onLogout
+                ) {
+                    Text(
+                        text = "Logout",
+                        color = MaterialTheme.colors.onSurface,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         } else {
@@ -399,22 +428,55 @@ fun RunScreen(onLogout: () -> Unit) {
 @Composable
 fun StartRunButton(onStart: () -> Unit) {
     val context = LocalContext.current
-    Button(onClick = {
-        Toast.makeText(context, context.getString(R.string.start_run_message), Toast.LENGTH_SHORT).show()
-        onStart()
-    }) {
-        Icon(imageVector = Icons.Filled.PlayArrow, contentDescription = "Start Run")
+    Button(
+        onClick = {
+            Toast.makeText(context, context.getString(R.string.start_run_message), Toast.LENGTH_SHORT).show()
+            onStart()
+        }
+    ) {
+        Icon(
+            imageVector = Icons.Filled.PlayArrow,
+            contentDescription = "Start Run",
+            modifier = Modifier.size(32.dp),
+            tint = MaterialTheme.colors.onPrimary
+        )
+    }
+}
+
+@Composable
+fun MetricDisplay(
+    title: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    isPrimary: Boolean = false
+) {
+    Column(
+        modifier = modifier.padding(vertical = 4.dp), // Add a little vertical padding
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = title,
+            color = MaterialTheme.colors.primary,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            color = MaterialTheme.colors.onSurface,
+            fontSize = if (isPrimary) 19.sp else 17.sp,
+            fontWeight = FontWeight.Normal
+        )
     }
 }
 
 @Composable
 fun RunInfo(
-    onStop: () -> Unit, 
+    onStop: () -> Unit,
     startTime: String?,
     dateFormat: SimpleDateFormat
 ) {
+    // All of your state variables and logic remain unchanged.
     val context = LocalContext.current
-
     var bpm by remember { mutableIntStateOf(0) }
     var bodySensorsPermissionGranted by remember {
         mutableStateOf(
@@ -425,7 +487,6 @@ fun RunInfo(
         )
     }
     var bodySensorsPermissionRequested by remember { mutableStateOf(false) }
-
     val bodySensorsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -437,24 +498,21 @@ fun RunInfo(
             Log.d("RunInfo", "Body Sensors permission granted!")
         }
     }
-
-    LaunchedEffect(Unit) { 
+    LaunchedEffect(Unit) {
         if (!bodySensorsPermissionGranted && !bodySensorsPermissionRequested) {
             Log.d("RunInfo", "Requesting Body Sensors permission.")
             bodySensorsPermissionRequested = true
             bodySensorsPermissionLauncher.launch(Manifest.permission.BODY_SENSORS)
         }
     }
-    
     val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
     val heartRateSensor: Sensor? = remember { sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE) }
-
     val heartRateListener = remember {
         object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent?) {
                 if (event?.sensor?.type == Sensor.TYPE_HEART_RATE) {
                     val newBpmValue = event.values.firstOrNull()?.toInt()
-                    if (newBpmValue != null && newBpmValue > 0) { 
+                    if (newBpmValue != null && newBpmValue > 0) {
                         bpm = newBpmValue
                         Log.d("RunInfo", "BPM Updated: $bpm")
                     }
@@ -465,7 +523,6 @@ fun RunInfo(
             }
         }
     }
-
     DisposableEffect(heartRateSensor, bodySensorsPermissionGranted) {
         if (bodySensorsPermissionGranted && heartRateSensor != null) {
             val registered = sensorManager.registerListener(
@@ -489,22 +546,18 @@ fun RunInfo(
             Log.d("RunInfo", "Heart rate sensor listener unregistered.")
         }
     }
-
     var elapsedSeconds by remember { mutableIntStateOf(0) }
     var paused by remember { mutableStateOf(false) }
-    var internalEndTime by remember { mutableStateOf<String?>(null) } 
-
+    var internalEndTime by remember { mutableStateOf<String?>(null) }
     var previousLocation by remember { mutableStateOf<Location?>(null) }
-    var totalDistanceMeters by remember { mutableFloatStateOf(0f) } 
+    var totalDistanceMeters by remember { mutableFloatStateOf(0f) }
     val locationHistory = remember { LinkedList<Pair<Location, Long>>() }
-    var rollingPace by remember { mutableStateOf(0.0) }
+    var rollingPace by remember { mutableFloatStateOf(0.0f) }
     val runPath = remember { mutableListOf<Map<String, Double?>>() }
-    var elevationGain by remember { mutableFloatStateOf(0.0f) } 
-    var maxElevation by remember { mutableFloatStateOf(0.0f) }  
-    var minElevation by remember { mutableFloatStateOf(Float.MAX_VALUE) } 
-
+    var elevationGain by remember { mutableFloatStateOf(0.0f) }
+    var maxElevation by remember { mutableFloatStateOf(0.0f) }
+    var minElevation by remember { mutableFloatStateOf(Float.MAX_VALUE) }
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
-
     val locationCallback = remember {
         object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
@@ -512,25 +565,25 @@ fun RunInfo(
                     if (!paused) {
                         if (previousLocation != null) {
                             val distance = previousLocation!!.distanceTo(location)
-                            if (distance > 1.0f) { 
+                            if (distance > 1.0f) {
                                 totalDistanceMeters += distance
                             }
                         }
-                        
+
                         val currentAltitude = if(location.hasAltitude()) location.altitude else 0.0
-                        
+
                         if (currentAltitude != 0.0) {
                             if (currentAltitude.toFloat() > maxElevation) maxElevation = currentAltitude.toFloat()
                             if (currentAltitude.toFloat() < minElevation) minElevation = currentAltitude.toFloat()
                             if (previousLocation != null && previousLocation!!.hasAltitude()) {
                                 val prevAltitude = previousLocation!!.altitude
                                 if (prevAltitude != 0.0) {
-                                     val elevationDiff = currentAltitude - prevAltitude
-                                     if (elevationDiff > 0) elevationGain += elevationDiff.toFloat()
+                                    val elevationDiff = currentAltitude - prevAltitude
+                                    if (elevationDiff > 0) elevationGain += elevationDiff.toFloat()
                                 }
                             }
                         }
-                        previousLocation = location 
+                        previousLocation = location
 
                         val now = System.currentTimeMillis()
                         locationHistory.add(Pair(location, now))
@@ -555,17 +608,16 @@ fun RunInfo(
                             val timeSpan = (locationHistory.last.second - locationHistory.first.second) / 1000.0
                             val minutes = timeSpan / 60.0
                             val km = rollingDistance / 1000.0
-                            if (km > 0 && minutes > 0) rollingPace = minutes / km
-                            else rollingPace = 0.0
+                            if (km > 0 && minutes > 0) rollingPace = (minutes / km).toFloat()
+                            else rollingPace = 0.0f
                         } else {
-                            rollingPace = 0.0
+                            rollingPace = 0.0f
                         }
                     }
                 }
             }
         }
     }
-
     DisposableEffect(Unit) {
         val locationRequest = com.google.android.gms.location.LocationRequest.Builder(com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY, 2000L).apply {
             setMinUpdateIntervalMillis(1000L)
@@ -583,21 +635,17 @@ fun RunInfo(
                 Log.d("RunInfo", "Location updates requested.")
             } catch (e: SecurityException) { Log.e("RunInfo", "SecurityException requesting location updates: ${e.message}") }
         } else {
-             Log.w("RunInfo", "Location permission not granted. Cannot request location updates.")
+            Log.w("RunInfo", "Location permission not granted. Cannot request location updates.")
         }
         onDispose {
-             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
                 fusedLocationClient.removeLocationUpdates(locationCallback)
                 Log.d("RunInfo", "Location updates removed.")
             }
         }
     }
-
     LaunchedEffect(paused) {
-        // Check runStarted from the parent composable's state if it dictates the timer should run
-        // However, RunInfo is only shown if runStarted is true, so this check might be redundant here
-        // For clarity, let's assume elapsedSeconds should tick as long as RunInfo is composed and not paused.
-        while (!paused) { 
+        while (!paused) {
             delay(1000)
             elapsedSeconds++
         }
@@ -606,97 +654,160 @@ fun RunInfo(
     val minutes = elapsedSeconds / 60
     val seconds = elapsedSeconds % 60
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center
+    Scaffold(
+        timeText = { TimeText() }
     ) {
-        Spacer(modifier = Modifier.height(16.dp)) 
-        Spacer(modifier = Modifier.weight(1f))
-
-            // Show BPM reading
-    Text(text = when {
-        !bodySensorsPermissionGranted -> "BPM: no permission"
-        heartRateSensor == null -> "BPM: N/A (No Sensor)"
-        bpm == -1 -> "BPM: Error"
-        bpm == 0 && bodySensorsPermissionGranted -> "BPM: ... " 
-        else -> "BPM: $bpm"
-    })
-        
-        
-        
-        Text(text = "Distance: %.2f km".format(totalDistanceMeters / 1000f))
-        Text(text = "Time: %02d:%02d".format(minutes, seconds))
-        Text(text = if (rollingPace > 0.0) "Pace: %.2f min/km".format(rollingPace) else "Pace: --")
-        if (elevationGain > 0) {
-            Text(text = "Elevation: +%.0f m".format(elevationGain))
-        }
-        
-        Spacer(modifier = Modifier.weight(1f)) 
-        
-        val coroutineScope = rememberCoroutineScope()
-        val userWeightKg = 70f
-        val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
-        val userId = prefs.getString("userId", "") ?: ""
-        val authToken = prefs.getString("auth_token", null)
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        // ✅ Add this parent Column back
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize()
         ) {
-            Button(onClick = { paused = !paused }) {
-                Icon(imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause, contentDescription = if (paused) "Resume" else "Pause")
-            }
-            Button(onClick = {
-                internalEndTime = dateFormat.format(Date()) 
-                val currentStartTime = startTime ?: dateFormat.format(Date(System.currentTimeMillis() - elapsedSeconds * 1000))
-                val calories = userWeightKg * (totalDistanceMeters / 1000f) * 1.036f
-                val avgPace = if (totalDistanceMeters > 0 && elapsedSeconds > 0) (elapsedSeconds / 60.0) / (totalDistanceMeters / 1000.0) else 0.0
-                val avgSpeed = if (elapsedSeconds > 0) (totalDistanceMeters / elapsedSeconds.toFloat()) else 0f
-
-
-                coroutineScope.launch {
-                    val trackId = if (runPath.isNotEmpty()) {
-                        createTrack(userId, runPath, authToken)
-                    } else {
-                        Log.w("RunBackend", "Run path is empty, not creating track.")
-                        null
-                    }
-
-                    if (trackId != null || runPath.isEmpty()) { 
-                        Log.d("RunBackend", "Proceeding to send run data. Track ID: $trackId")
-                        val (success, errorMsg) = sendRunToBackend(
-                            userId = userId,
-                            trackId = trackId ?: "", 
-                            startTime = currentStartTime,
-                            stopTime = internalEndTime!!,
-                            timestamp = dateFormat.format(Date()), 
-                            distance = totalDistanceMeters,
-                            duration = elapsedSeconds,
-                            calories = calories,
-                            averagePace = avgPace.toFloat(),
-                            averageSpeed = avgSpeed,
-                            authToken = authToken
+            // This Column now correctly sits inside the parent, so .weight() is valid
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // This will now compile
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 20.dp, start = 8.dp, end = 8.dp)
+            ) {
+                // ROW 1: TIME and BPM
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    MetricDisplay(
+                        title = "TIME",
+                        value = "%02d:%02d".format(minutes, seconds),
+                        isPrimary = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (heartRateSensor != null || !bodySensorsPermissionGranted) {
+                        MetricDisplay(
+                            title = "BPM",
+                            value = when {
+                                !bodySensorsPermissionGranted -> "no perm"
+                                heartRateSensor == null -> "N/A"
+                                bpm == -1 -> "Error"
+                                bpm == 0 && bodySensorsPermissionGranted -> "..."
+                                else -> "$bpm"
+                            },
+                            modifier = Modifier.weight(1f)
                         )
-                         Toast.makeText(
-                            context,
-                            if (success) "Run logged successfully!" else "Failed to log run: $errorMsg",
-                            Toast.LENGTH_LONG
-                        ).show()
                     } else {
-                         Log.e("RunBackend", "Failed to create track and track is considered essential.")
-                        Toast.makeText(
-                            context,
-                            "Failed to create track for the run",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        Spacer(modifier = Modifier.weight(1f))
                     }
-                    onStop() 
                 }
-            }) {
-                Icon(imageVector = Icons.Filled.Stop, contentDescription = "Stop")
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // ROW 2: DISTANCE and PACE
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    MetricDisplay(
+                        title = "DISTANCE",
+                        value = "%.2f km".format(totalDistanceMeters / 1000f),
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricDisplay(
+                        title = "PACE",
+                        value = if (rollingPace > 0.0) "%.1f min/km".format(rollingPace) else "--",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                // ROW 3: ELEVATION
+                if (elevationGain > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        MetricDisplay(
+                            title = "ELEVATION",
+                            value = "+%.0f m".format(elevationGain),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+
+            val coroutineScope = rememberCoroutineScope()
+            val userWeightKg = 70f
+            val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+            val userId = prefs.getString("userId", "") ?: ""
+            val authToken = prefs.getString("auth_token", null)
+
+            // The button Row also sits correctly inside the parent Column
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp, start = 16.dp, end = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CompactButton(onClick = { paused = !paused }) {
+                    Icon(
+                        imageVector = if (paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = if (paused) "Resume" else "Pause",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                CompactButton(onClick = {
+                    internalEndTime = dateFormat.format(Date())
+                    val currentStartTime = startTime ?: dateFormat.format(Date(System.currentTimeMillis() - elapsedSeconds * 1000))
+                    val calories = userWeightKg * (totalDistanceMeters / 1000f) * 1.036f
+                    val avgPace = if (totalDistanceMeters > 0 && elapsedSeconds > 0) (elapsedSeconds / 60.0) / (totalDistanceMeters / 1000.0) else 0.0
+                    val avgSpeed = if (elapsedSeconds > 0) (totalDistanceMeters / elapsedSeconds.toFloat()) else 0f
+
+                    coroutineScope.launch {
+                        val trackId = if (runPath.isNotEmpty()) {
+                            createTrack(userId, runPath, authToken)
+                        } else {
+                            Log.w("RunBackend", "Run path is empty, not creating track.")
+                            null
+                        }
+
+                        if (trackId != null || runPath.isEmpty()) {
+                            Log.d("RunBackend", "Proceeding to send run data. Track ID: $trackId")
+                            val (success, errorMsg) = sendRunToBackend(
+                                userId = userId,
+                                trackId = trackId ?: "",
+                                startTime = currentStartTime,
+                                stopTime = internalEndTime!!,
+                                timestamp = dateFormat.format(Date()),
+                                distance = totalDistanceMeters,
+                                duration = elapsedSeconds,
+                                calories = calories,
+                                averagePace = avgPace.toFloat(),
+                                averageSpeed = avgSpeed,
+                                authToken = authToken
+                            )
+                            Toast.makeText(
+                                context,
+                                if (success) "Run logged successfully!" else "Failed to log run: $errorMsg",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        } else {
+                            Log.e("RunBackend", "Failed to create track and track is considered essential.")
+                            Toast.makeText(
+                                context,
+                                "Failed to create track for the run",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                        onStop()
+                    }
+                }) {
+                    Icon(
+                        imageVector = Icons.Filled.Stop,
+                        contentDescription = "Stop",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
     }

@@ -111,7 +111,8 @@ private fun createTrustAllCerts(): Array<TrustManager> {
 
 suspend fun createTrack(
     userId: String,
-    path: List<Map<String, Double?>>,
+    path: List<List<Double>>,
+    dateFormat: SimpleDateFormat,
     authToken: String? = null
 ): String? = withContext(Dispatchers.IO) {
     try {
@@ -119,7 +120,7 @@ suspend fun createTrack(
             put("userId", userId)
             put("path", JSONArray(path))
             put("name", "Wear OS Run")
-            put("timestamp", System.currentTimeMillis().toString())
+            put("timestamp", dateFormat.format(Date())) // Use the correct format
         }
 
         Log.d("RunBackend", "Creating track for userId: $userId")
@@ -475,7 +476,7 @@ fun RunInfo(
     startTime: String?,
     dateFormat: SimpleDateFormat
 ) {
-    // All of your state variables and logic remain unchanged.
+    // All of your state variables and logic
     val context = LocalContext.current
     var bpm by remember { mutableIntStateOf(0) }
     var bodySensorsPermissionGranted by remember {
@@ -553,7 +554,7 @@ fun RunInfo(
     var totalDistanceMeters by remember { mutableFloatStateOf(0f) }
     val locationHistory = remember { LinkedList<Pair<Location, Long>>() }
     var rollingPace by remember { mutableFloatStateOf(0.0f) }
-    val runPath = remember { mutableListOf<Map<String, Double?>>() }
+    val runPath = remember { mutableListOf<List<Double>>() }
     var elevationGain by remember { mutableFloatStateOf(0.0f) }
     var maxElevation by remember { mutableFloatStateOf(0.0f) }
     var minElevation by remember { mutableFloatStateOf(Float.MAX_VALUE) }
@@ -587,12 +588,7 @@ fun RunInfo(
 
                         val now = System.currentTimeMillis()
                         locationHistory.add(Pair(location, now))
-                        runPath.add(mapOf(
-                            "latitude" to location.latitude,
-                            "longitude" to location.longitude,
-                            "altitude" to (currentAltitude.takeIf { it != 0.0 } ?: null)
-                        ))
-
+                        runPath.add(listOf(location.longitude, location.latitude, currentAltitude))
                         while (locationHistory.isNotEmpty() && now - locationHistory.first.second > 30_000) {
                             locationHistory.removeFirst()
                         }
@@ -657,19 +653,17 @@ fun RunInfo(
     Scaffold(
         timeText = { TimeText() }
     ) {
-        // ✅ Add this parent Column back
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxSize()
         ) {
-            // This Column now correctly sits inside the parent, so .weight() is valid
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f) // This will now compile
+                    .weight(1f)
                     .verticalScroll(rememberScrollState())
-                    .padding(top = 20.dp, start = 8.dp, end = 8.dp)
+                    .padding(top = 16.dp, start = 8.dp, end = 8.dp)
             ) {
                 // ROW 1: TIME and BPM
                 Row(
@@ -741,7 +735,6 @@ fun RunInfo(
             val userId = prefs.getString("userId", "") ?: ""
             val authToken = prefs.getString("auth_token", null)
 
-            // The button Row also sits correctly inside the parent Column
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -765,17 +758,17 @@ fun RunInfo(
 
                     coroutineScope.launch {
                         val trackId = if (runPath.isNotEmpty()) {
-                            createTrack(userId, runPath, authToken)
+                            createTrack(userId, runPath, dateFormat, authToken) // Pass dateFormat here
                         } else {
                             Log.w("RunBackend", "Run path is empty, not creating track.")
                             null
                         }
 
-                        if (trackId != null || runPath.isEmpty()) {
+                        if (trackId != null) {
                             Log.d("RunBackend", "Proceeding to send run data. Track ID: $trackId")
                             val (success, errorMsg) = sendRunToBackend(
                                 userId = userId,
-                                trackId = trackId ?: "",
+                                trackId = trackId ,
                                 startTime = currentStartTime,
                                 stopTime = internalEndTime!!,
                                 timestamp = dateFormat.format(Date()),
@@ -791,7 +784,12 @@ fun RunInfo(
                                 if (success) "Run logged successfully!" else "Failed to log run: $errorMsg",
                                 Toast.LENGTH_LONG
                             ).show()
-                        } else {
+                        }
+                        else if (runPath.isNotEmpty()){
+                            Log.e("RunBackend", "Failed to create track, so the run was not logged.")
+                            Toast.makeText(context, "Failed to create track", Toast.LENGTH_LONG).show()
+                        }
+                        else {
                             Log.e("RunBackend", "Failed to create track and track is considered essential.")
                             Toast.makeText(
                                 context,

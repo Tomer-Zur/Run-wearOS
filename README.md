@@ -70,6 +70,32 @@ The app integrates with the existing Run backend:
 - Uses the same authentication endpoints
 - Sends run data to the same API
 
+## Tech
+- Kotlin
+
+## Project Structure
+
+```
+Run-wearOS/
+├── app/
+│   └── src/main/
+│       ├── java/com/example/run_wearos/
+│       │   ├── MainActivity.kt              # Main run tracking activity
+│       │   ├── LoginScreen.kt               # Authentication screen
+│       │   └── TokenListenerService.kt      # Background token service
+│       ├── res/                             # App resources
+│       └── AndroidManifest.xml              # App configuration
+├── gradle/                                  # Build configuration
+├── build.gradle.kts                         # Project dependencies
+└── README.md                               # This file
+```
+
+### Key Components
+
+- **MainActivity.kt**: Core run tracking functionality with GPS, heart rate monitoring, and data sync
+- **LoginScreen.kt**: Authentication UI with JWT token management
+- **TokenListenerService.kt**: Background service for token validation and refresh
+
 ## Troubleshooting
 
 ### Login Issues

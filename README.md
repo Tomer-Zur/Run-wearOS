@@ -1,23 +1,22 @@
 # Run Wear OS App
 
 A Wear OS application for tracking running activities and syncing with the main Run app backend.
+Main Run app - https://github.com/Eranshh/Run
+Run app bakcend - https://github.com/avivjan/Run
 
 ## Features
 
 - **Authentication**: Secure login system with JWT token-based authentication
-- **Run Tracking**: Track your runs with GPS location, distance, pace, and calories
+- **Run Tracking**: Track your runs with GPS location, distance, pace, and calories, bpm and elevation
 - **Data Sync**: Automatically sync run data to the backend server
-- **Offline Support**: Store credentials locally for seamless login experience
-
-## Login System
-
-The app implements a complete authentication flow:
 
 ### First Time Setup
-1. Launch the app on your Wear OS device
-2. Enter your username and password (same credentials as the main Run app)
-3. Tap "Login" to authenticate
-4. Your credentials are securely stored locally
+In Android Studio, latest version:
+1. If testing, create a new wearOS large round virtual device or pair a real device via wifi
+2. Sync gradle files, build and launch the app on the device ( "run" on the top bar should do it for you)
+3. Enter your username and password (same credentials as the main Run app - you will need to create a user there first)
+4. Start a run with the ▶️ button, pause with ⏸️, when finished tap ⏹️ to end run and log data to the database
+5. You can see the run details including track drawn on the map, elevation graph and other stats in the main app user's history page
 
 ### Subsequent Launches
 - The app automatically checks for stored credentials
@@ -70,7 +69,6 @@ The app implements a complete authentication flow:
 The app integrates with the existing Run backend:
 - Uses the same authentication endpoints
 - Sends run data to the same API
-- Maintains user session consistency across devices
 
 ## Troubleshooting
 
@@ -88,3 +86,9 @@ The app integrates with the existing Run backend:
 - Clear app data and re-login
 - Ensure all permissions are granted
 - Check for Wear OS updates
+
+### Known Issues
+- If using android studio virtual device, giving premission for body sensor data will fail and "no prem" will be diplayed in bpm field
+
+## License
+- This project is licensed under the MIT License.

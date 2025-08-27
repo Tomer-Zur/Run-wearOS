@@ -27,6 +27,7 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 import java.security.cert.X509Certificate
 
+// These are the API endpoints for your authentication services.
 const val LOGIN_URL = "https://runfuncionapp.azurewebsites.net/api/login"
 const val VALIDATE_TOKEN_URL = "https://runfuncionapp.azurewebsites.net/api/validate-token"
 
@@ -39,6 +40,7 @@ private fun createTrustAllCerts(): Array<TrustManager> {
     })
 }
 
+// A data class to cleanly represent the possible outcomes of a login attempt.
 data class LoginResponse(
     val success: Boolean,
     val token: String? = null,
@@ -47,6 +49,11 @@ data class LoginResponse(
     val errorMessage: String? = null
 )
 
+/**
+ * A suspend function to handle the login network request on a background thread.
+ * It takes username and password, sends them to the server, and returns a LoginResponse.
+ * Using withContext(Dispatchers.IO) ensures this network call doesn't freeze the UI.
+ */
 suspend fun loginUser(username: String, password: String): LoginResponse = withContext(Dispatchers.IO) {
     try {
         val json = JSONObject().apply {
@@ -115,6 +122,10 @@ suspend fun loginUser(username: String, password: String): LoginResponse = withC
     }
 }
 
+/**
+ * A suspend function that checks if a stored authentication token is still valid.
+ * It makes a GET request to the server with the token in the Authorization header.
+ */
 suspend fun validateToken(token: String): Boolean = withContext(Dispatchers.IO) {
     try {
         val url = URL(VALIDATE_TOKEN_URL)
@@ -146,6 +157,10 @@ suspend fun validateToken(token: String): Boolean = withContext(Dispatchers.IO) 
     }
 }
 
+/**
+ * Utility functions to save and retrieve the authentication token, username, and userId
+ * from SharedPreferences, which provides persistent on-device storage.
+ */
 fun saveCredentials(context: Context, token: String, username: String, userId: String) {
     val prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
     prefs.edit().apply {
@@ -171,6 +186,9 @@ fun getStoredToken(context: Context): String? {
     return prefs.getString("auth_token", null)
 }
 
+/**
+ * The Jetpack Compose UI for the Login Screen.
+ */
 @Composable
 fun LoginScreen(onLoginSuccess: () -> Unit) {
     var username by remember { mutableStateOf("") }

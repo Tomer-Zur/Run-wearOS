@@ -1,7 +1,3 @@
-/* While this template provides a good starting point for using Wear Compose, you can always
- * take a look at https://github.com/android/wear-os-samples/tree/main/ComposeStarter to find the
- * most up to date changes to the libraries and their usages.
- */
 
 package com.example.run_wearos.presentation
 
@@ -32,7 +28,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -60,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.wear.compose.material.Button
-import androidx.wear.compose.material.Card
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.Icon
 import androidx.wear.compose.material.MaterialTheme
@@ -71,14 +65,10 @@ import androidx.wear.compose.material.TimeText
 import androidx.wear.tooling.preview.devices.WearDevices
 import com.example.run_wearos.R
 import com.example.run_wearos.presentation.theme.RunwearOsTheme
-// Remove direct import of LocationRequest, Priority if fully qualifying
-// import com.google.android.gms.location.LocationRequest
-// import com.google.android.gms.location.Priority
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
 import java.net.URL
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
@@ -97,6 +87,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
+// API endpoints for creating run activities and GPS tracks.
 const val CREATE_ACTIVITY_URL = "https://runfuncionapp.azurewebsites.net/api/createActivity"
 const val CREATE_TRACK_URL = "https://runfuncionapp.azurewebsites.net/api/createTrack"
 
@@ -109,6 +100,11 @@ private fun createTrustAllCerts(): Array<TrustManager> {
     })
 }
 
+/**
+ * A suspend function to send the collected GPS path to the backend.
+ * It runs on a background thread to avoid blocking the UI.
+ * Returns the unique trackId from the server if successful.
+ */
 suspend fun createTrack(
     userId: String,
     path: List<List<Double>>,
@@ -170,6 +166,10 @@ suspend fun createTrack(
     }
 }
 
+/**
+ * A suspend function to send the final run summary data (distance, time, etc.) to the backend.
+ * It also runs on a background thread.
+ */
 suspend fun sendRunToBackend(
     userId: String,
     trackId: String,
@@ -244,6 +244,9 @@ suspend fun sendRunToBackend(
     }
 }
 
+/**
+ * The main and only Activity for the Wear OS app. It's the entry point.
+ */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -261,6 +264,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+/**
+ * The root composable of the application. It sets up the theme and the navigation wrappers.
+ */
 @Composable
 fun WearApp() {
     RunwearOsTheme {
@@ -279,6 +285,11 @@ fun WearApp() {
         }
     }
 }
+
+/**
+ * A "gatekeeper" composable that handles the authentication state.
+ * It checks for a valid token and shows either the LoginScreen or the main app content.
+ */
 @Composable
 fun AuthenticationWrapper(content: @Composable (onLogout: () -> Unit) -> Unit) {
     val context = LocalContext.current
@@ -327,6 +338,10 @@ fun AuthenticationWrapper(content: @Composable (onLogout: () -> Unit) -> Unit) {
     }
 }
 
+/**
+ * A "gatekeeper" composable that handles location permissions.
+ * It ensures the user has granted location access before showing the main RunScreen.
+ */
 @Composable
 fun LocationPermissionWrapper(content: @Composable () -> Unit) {
     val context = LocalContext.current
@@ -364,7 +379,10 @@ fun LocationPermissionWrapper(content: @Composable () -> Unit) {
     }
 }
 
-
+/**
+ * The main screen that acts as a state machine, showing either the "Ready to Run?"
+ * UI or the live `RunInfo` screen based on the `runStarted` boolean.
+ */
 @Composable
 fun RunScreen(onLogout: () -> Unit) {
     var runStarted by remember { mutableStateOf(false) }
@@ -470,6 +488,9 @@ fun MetricDisplay(
     }
 }
 
+/**
+ * The core composable for the live run tracking screen.
+ */
 @Composable
 fun RunInfo(
     onStop: () -> Unit,
